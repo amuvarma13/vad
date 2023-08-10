@@ -1,6 +1,6 @@
 const vad = require("@sentiment_technologies/vad-node");
 const WebSocket = require('ws');
-let ws_global;
+
 
 function int16ToFloat32(inputArray) {
     const buffer = Buffer.from(inputArray);
@@ -14,47 +14,50 @@ function int16ToFloat32(inputArray) {
 }
 
 async function main() {
-    let isSpeaking = false;
-    let frame = [];
 
-    const myvad = await vad.RealTimeVAD.new(16000, {
-        onFrameProcessed: (probabilities) => {
-            let currentlySpeaking = probabilities.isSpeech > 0.6;
-            ws_global.send(JSON.stringify({
-                event:'probabilities', 
-                data: probabilities
-            }))
-            if (currentlySpeaking !== isSpeaking) {
-                isSpeaking = currentlySpeaking;
-                if(isSpeaking) {
-                    ws_global.send(JSON.stringify({
-                        event: 'started_speaking',
-                        data: Math.random().toString().slice(0, 3)
-                    }));
-                } else {
-                    ws_global.send(JSON.stringify({
-                        event: 'stopped_speaking',
-                        data: Math.random().toString().slice(0, 3)
-                    }));
-                }
-            }
-        },
-        onVADMisfire: () => {
-            console.log("VAD misfire");
-        },
-    });
+
+
 
     const sampleRate = 16000;
     const frameDuration =200; // milliseconds
     const frameSize = (sampleRate / 1000) * frameDuration;
 
-    const wss = new WebSocket.Server({ port: 8080 });
+    const wss = new WebSocket.Server({ port: 8081});
 
-    wss.on('connection', ws => {
-        ws_global = ws
+    wss.on('connection', async(ws) => {
+        let isSpeaking = false;
+        let frame = [];
+        const myvad = await vad.RealTimeVAD.new(16000, {
+            onFrameProcessed: (probabilities) => {
+                let currentlySpeaking = probabilities.isSpeech > 0.6;
+                ws.send(JSON.stringify({
+                    event:'probabilities', 
+                    data: probabilities
+                }))
+                if (currentlySpeaking !== isSpeaking) {
+                    isSpeaking = currentlySpeaking;
+                    if(isSpeaking) {
+                        ws.send(JSON.stringify({
+                            event: 'started_speaking',
+                            data: Math.random().toString().slice(0, 3)
+                        }));
+                    } else {
+                        ws.send(JSON.stringify({
+                            event: 'stopped_speaking',
+                            data: Math.random().toString().slice(0, 3)
+                        }));
+                    }
+                }
+            },
+            onVADMisfire: () => {
+                console.log("VAD misfire");
+            },
+        });
+
         ws.send(JSON.stringify({"connected":true}))
         console.log("connected")
         ws.on('message', async function (data) {
+            
             // console.log(data)
             frame.push(...Array.from(data));
             while (frame.length >= frameSize) {
